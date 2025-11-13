@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Trash2, Plus, ArrowLeft } from "lucide-react";
+import { Trash2, Plus, ArrowLeft, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import QRCodeSection from "@/components/QRCodeSection";
+import { User, Session } from "@supabase/supabase-js";
 
 interface BusRoute {
   id: string;
@@ -27,6 +28,10 @@ interface BusRoute {
 const Admin = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     route_number: "",
     start_location: "",
@@ -37,6 +42,70 @@ const Admin = () => {
     first_trip_time: "",
     last_trip_time: "",
   });
+
+  useEffect(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (!session?.user) {
+          navigate("/auth");
+        } else {
+          // Check admin role
+          setTimeout(() => {
+            checkAdminRole(session.user.id);
+          }, 0);
+        }
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (!session?.user) {
+        navigate("/auth");
+      } else {
+        checkAdminRole(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const checkAdminRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .single();
+
+      if (error || !data) {
+        toast.error("Access denied. Admin privileges required.");
+        await supabase.auth.signOut();
+        navigate("/auth");
+        return;
+      }
+
+      setIsAdmin(true);
+    } catch (error) {
+      console.error("Error checking admin role:", error);
+      navigate("/auth");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    toast.success("Signed out successfully");
+    navigate("/");
+  };
 
   const { data: routes, isLoading } = useQuery({
     queryKey: ["bus-routes"],
@@ -102,15 +171,33 @@ const Admin = () => {
     addRouteMutation.mutate(formData);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card shadow-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-              <ArrowLeft className="h-5 w-5" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-2xl font-bold text-foreground">Admin Panel</h1>
+            </div>
+            <Button variant="outline" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
             </Button>
-            <h1 className="text-2xl font-bold text-foreground">Admin Panel</h1>
           </div>
         </div>
       </header>

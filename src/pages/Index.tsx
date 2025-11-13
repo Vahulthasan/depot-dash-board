@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import BusTimingTable from "@/components/BusTimingTable";
 import SearchBar from "@/components/SearchBar";
-import { Settings, RefreshCw, Bus } from "lucide-react";
+import { Shield, RefreshCw, Bus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -83,10 +83,10 @@ const Index = () => {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => navigate("/admin")}
+              onClick={() => navigate("/auth")}
               className="gap-2"
             >
-              <Settings className="h-4 w-4" />
+              <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Admin</span>
             </Button>
           </div>
