@@ -29,20 +29,34 @@ const Index = () => {
     setVerifiedAt(null);
   };
 
+  const runOCR = async (src: string, base: number, span: number) => {
+    const result = await Tesseract.recognize(src, "eng", {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          setProgress(base + Math.round(m.progress * span));
+        }
+      },
+    });
+    return result.data.text;
+  };
+
   const processImage = useCallback(async (imageSrc: string) => {
     setStep("processing");
     setProgress(0);
     try {
+      // Pass 1: preprocessed image
       const processed = await preprocessImage(imageSrc);
-      const result = await Tesseract.recognize(processed, "eng", {
-        logger: (m) => {
-          if (m.status === "recognizing text") {
-            setProgress(Math.round(m.progress * 100));
-          }
-        },
-      });
-      const dobDate = extractDOB(result.data.text);
+      let text = await runOCR(processed, 0, 50);
+      let dobDate = extractDOB(text);
+
+      // Pass 2: fall back to raw image if no DOB found
       if (!dobDate) {
+        text = await runOCR(imageSrc, 50, 50);
+        dobDate = extractDOB(text);
+      }
+
+      if (!dobDate) {
+        console.warn("OCR text (no DOB found):", text);
         setErrorMsg(tr.noDob);
         setStep("error");
         return;
